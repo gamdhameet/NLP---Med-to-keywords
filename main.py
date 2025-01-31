@@ -1,13 +1,12 @@
 import speech_recognition as sr
 import spacy
+import re
 
 # Load the NLP model (specialized in scientific/medical text)
 nlp = spacy.load("en_core_sci_sm")
 
 def audio_to_text(audio_file):
-    """
-    Convert an audio file to text using speech recognition.
-    """
+    """Convert an audio file to text using speech recognition."""
     recognizer = sr.Recognizer()
     with sr.AudioFile(audio_file) as source:
         print("Processing audio...")
@@ -25,30 +24,54 @@ def audio_to_text(audio_file):
         return None
 
 def extract_keywords(text):
-    """
-    Extract important words and phrases from the text using NLP.
-    """
+    """Extract and categorize keywords from text using NLP and regex."""
     doc = nlp(text)
-    keywords = set()
+    keywords = {
+        "Drugs": set(),
+        "Age": set(),
+        "Name": set()
+    }
 
-    for token in doc:
-        # Extract nouns, proper nouns, and adjectives (important keywords)
-        if token.pos_ in ["NOUN", "PROPN", "ADJ"]:
-            keywords.add(token.text)
-
-    # Extract named entities (could be medications, diseases, medical terms, etc.)
+    # Extract chemical entities for Drugs
     for ent in doc.ents:
-        keywords.add(ent.text)
+        if ent.label_ == "CHEMICAL":
+            keywords["Drugs"].add(ent.text)
 
-    print("\nExtracted Keywords:")
-    for keyword in keywords:
-        print(f"- {keyword}")
+    # Extract proper nouns for Name
+    for token in doc:
+        if token.pos_ == "PROPN":
+            keywords["Name"].add(token.text)
 
+    # Extract age using regex pattern
+    age_pattern = re.compile(r'(\d+)\s+years?\s+old', re.IGNORECASE)
+    age_matches = age_pattern.findall(text)
+    keywords["Age"].update(age_matches)
+
+    # Convert sets to sorted lists
+    for category in keywords:
+        keywords[category] = sorted(keywords[category])
+    
     return keywords
+
+def save_to_file(filename, transcript, keywords):
+    """Save transcript and keywords to a text file."""
+    with open(filename, "w") as f:
+        f.write("Transcript:\n")
+        f.write(f'"{transcript}"\n\n')
+        f.write("Keywords:\n")
+        
+        # Write non-empty categories
+        for category, items in keywords.items():
+            if items:
+                f.write(f"{category}: {', '.join(items)}\n")
 
 # Example Usage
 if __name__ == "__main__":
     audio_file = "sample_audio.wav"  # Replace with your audio file
+    output_file = "transcript_keywords.txt"
+    
     text = audio_to_text(audio_file)
     if text:
-        extract_keywords(text)
+        keywords = extract_keywords(text)
+        save_to_file(output_file, text, keywords)
+        print(f"\nTranscript and keywords saved to '{output_file}'")

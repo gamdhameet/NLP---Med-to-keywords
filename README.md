@@ -1,34 +1,77 @@
-# Medical Audio to Text Processing
+import speech_recognition as sr
+import spacy
+import re
 
-This project converts medical audio recordings to text and extracts important keywords using Natural Language Processing (NLP). The current implementation uses **speech recognition** to transcribe audio and **spaCy with SciSpaCy** to analyze the text.
+# Load the NLP model (specialized in scientific/medical text)
+nlp = spacy.load("en_core_sci_sm")
 
-## Features
-- Converts speech to text from an audio file
-- Extracts important keywords dynamically using NLP
-- Uses **SciSpaCy's** medical NLP model (`en_core_sci_sm`) for better accuracy
+def audio_to_text(audio_file):
+    """Convert an audio file to text using speech recognition."""
+    recognizer = sr.Recognizer()
+    with sr.AudioFile(audio_file) as source:
+        print("Processing audio...")
+        audio = recognizer.record(source)
+    
+    try:
+        text = recognizer.recognize_google(audio)
+        print("\nConverted Text:\n", text)
+        return text
+    except sr.UnknownValueError:
+        print("Could not understand audio")
+        return None
+    except sr.RequestError:
+        print("Speech Recognition service is unavailable")
+        return None
 
-## Installation
-Ensure you have Python installed, then run:
-```sh
-pip install -r requirements.txt
-```
-Additionally, download the necessary NLP model:
-```sh
-python -m spacy download en_core_sci_sm
-```
+def extract_keywords(text):
+    """Extract and categorize keywords from text using NLP and regex."""
+    doc = nlp(text)
+    keywords = {
+        "Drugs": set(),
+        "Age": set(),
+        "Name": set()
+    }
 
-## Usage
-Run the script and provide an audio file:
-```sh
-python main.py
-```
-Replace `sample_audio.wav` with your actual audio file.
+    # Extract chemical entities for Drugs
+    for ent in doc.ents:
+        if ent.label_ == "CHEMICAL":
+            keywords["Drugs"].add(ent.text)
 
-## Future Improvements
-This is a basic implementation. NLP can be improved by:
-- **Using more advanced medical NLP models** (e.g., `en_core_sci_md` or `en_core_sci_lg`)
-- **Customizing entity recognition** to focus on specific medical terms
-- **Integrating machine learning models** for better keyword extraction
-- **Improving speech recognition** with domain-specific language models
+    # Extract proper nouns for Name
+    for token in doc:
+        if token.pos_ == "PROPN":
+            keywords["Name"].add(token.text)
 
+    # Extract age using regex pattern
+    age_pattern = re.compile(r'(\d+)\s+years?\s+old', re.IGNORECASE)
+    age_matches = age_pattern.findall(text)
+    keywords["Age"].update(age_matches)
 
+    # Convert sets to sorted lists
+    for category in keywords:
+        keywords[category] = sorted(keywords[category])
+    
+    return keywords
+
+def save_to_file(filename, transcript, keywords):
+    """Save transcript and keywords to a text file."""
+    with open(filename, "w") as f:
+        f.write("Transcript:\n")
+        f.write(f'"{transcript}"\n\n')
+        f.write("Keywords:\n")
+        
+        # Write non-empty categories
+        for category, items in keywords.items():
+            if items:
+                f.write(f"{category}: {', '.join(items)}\n")
+
+# Example Usage
+if __name__ == "__main__":
+    audio_file = "sample_audio.wav"  # Replace with your audio file
+    output_file = "transcript_keywords.txt"
+    
+    text = audio_to_text(audio_file)
+    if text:
+        keywords = extract_keywords(text)
+        save_to_file(output_file, text, keywords)
+        print(f"\nTranscript and keywords saved to '{output_file}'")
