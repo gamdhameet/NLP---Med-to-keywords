@@ -13,7 +13,7 @@ def audio_to_text(audio_file):
         audio = recognizer.record(source)
     
     try:
-        text = recognizer.recognize_google(audio)
+        text = recognizer.recognize_google(audio, show_all=False, language="en-US", key=None)
         print("\nConverted Text:\n", text)
         return text
     except sr.UnknownValueError:
